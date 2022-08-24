@@ -1,4 +1,6 @@
 */
+*.tar.gz
+*.txt
 *.json
 discord_token
 global_config.py
