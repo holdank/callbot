@@ -7,6 +7,9 @@ The bot maintains lists of users on the Discord server, backed by a Google Sheet
 ### `/sync` or `!sync`
 Syncs the bot's commands to the server. This is only needed on initial setup and changes to commands.
 
+### `/screenme`
+Adds the user of the command to the requests list.
+
 ### `/cfg`
 | Subcommand | Description                              |
 | ---------- |----------------------------------------- |
@@ -30,3 +33,4 @@ Syncs the bot's commands to the server. This is only needed on initial setup and
 | `connect @user`          | Connects a user to the call-in channel.                             |
 | `send_message #channel`  | Sends the lists of new and repeat callers to the specified channel. |
 | `refresh`                | Refreshes the callers lists. (Only needed if manually modified).    |
+| `chronicle`              | Adds a user to the caller history list.                             |
