@@ -120,7 +120,7 @@ class SheetsWrapper:
         spreadsheetId=self.spreadsheet_id,
         range=f"{sheet}!2:{2+len(new_rows)}",
         valueInputOption="RAW",
-        body=value_list2(new_rows)).execute()
+        body=value_multi_list(new_rows)).execute()
     return result
 
 

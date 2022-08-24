@@ -8,14 +8,14 @@ import traceback
 
 from discord import app_commands
 from discord.ext import commands
-from global_config import GUILD_ID, SPREADSHEET_ID, SHEETS_SCOPES
+from global_config import GUILD_ID, SPREADSHEET_ID, SHEETS_SCOPES, DEV_ID
 from google.oauth2.service_account import Credentials
 
 
 from config import ConfigCog, ConfigWrapper
 from sheets_orm import SheetsWrapper
 from sync import SyncCog
-from user_commands import RequestsCog, CallersCog
+from user_commands import RequestsCog, CallersCog, UserCommandsCog
 
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,14 @@ class LoaderCog(commands.Cog):
     else:
       content = f"Error:\n```py\n{''.join(traceback.format_exception(error))}```"
     logging.warning(content)
+
+    # Ping me if there's an error.
+    guild = self.bot.get_guild(GUILD_ID)
+    if guild:
+      dev = guild.get_member(DEV_ID)
+      if dev:
+        content = f"{dev.mention}\n{content}"
+
     if not itx.response.is_done():
       await itx.response.send_message(content)
     else:
@@ -68,6 +76,7 @@ class LoaderCog(commands.Cog):
 
       await self.bot.add_cog(SyncCog(guild, self.bot.tree))
       config_wrapper = ConfigWrapper(self.config_path, self.schema_path, guild)
+      await self.bot.add_cog(UserCommandsCog(self.sheets_wrapper, config_wrapper, guild))
       await self.bot.add_cog(ConfigCog(config_wrapper))
       await self.bot.add_cog(RequestsCog(self.sheets_wrapper, config_wrapper, guild))
       await self.bot.add_cog(CallersCog(self.sheets_wrapper, config_wrapper, guild))

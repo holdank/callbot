@@ -116,6 +116,37 @@ async def update_callers_message(itx: discord.Interaction, config_wrapper: Confi
     await itx.followup.send("No callers list message was found. Use `/callers send_message` to create one.")
 
 
+class UserCommandsCog(commands.Cog, description="Call-in commands for users."):
+  def __init__(self, sheets_wrapper: SheetsWrapper, config_wrapper: ConfigWrapper, guild: discord.Guild):
+    self.sheets_wrapper = sheets_wrapper
+    self.config_wrapper = config_wrapper
+    self.guild = guild
+
+  async def cog_load(self):
+    logger.info("UserCommandsCog loaded.")
+
+  @app_commands.command()
+  @app_commands.guilds(GUILD_ID)
+  async def screenme(self, itx: discord.Interaction):
+    """Adds you to the list of people requesting to be screened."""
+    user = itx.user
+    await itx.response.defer(ephemeral=True)
+    if await asyncio.to_thread(self.sheets_wrapper.get, "Requests", user.id):
+      await itx.followup.send("You're already on the requests list.", ephemeral=True)
+      return
+    if await asyncio.to_thread(self.sheets_wrapper.get, "New Callers", user.id):
+      await itx.followup.send("You're already on the callers list.", ephemeral=True)
+      return
+    if await asyncio.to_thread(self.sheets_wrapper.get, "Repeat Callers", user.id):
+      await itx.followup.send("You're already on the callers list.", ephemeral=True)
+      return
+    values = [user.id, str(user), sheet_time()]
+    await asyncio.to_thread(self.sheets_wrapper.append, "Requests", values)
+    await user.add_roles(await self.config_wrapper.requests_role())
+    await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+    await itx.followup.send("You've been added to the requests list!", ephemeral=True)
+
+
 @app_commands.guilds(GUILD_ID)
 class RequestsCog(commands.GroupCog, group_name="requests", description="Commands to manage screening requests"):
   def __init__(self, sheets_wrapper: SheetsWrapper, config_wrapper: ConfigWrapper, guild: discord.Guild):
@@ -128,6 +159,7 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
 
   @app_commands.command()
   async def send_message(self, itx: discord.Interaction, channel: discord.TextChannel):
+    """Sends the call list message. Only needed on first setup."""
     # TODO: Handle existing message.
     await itx.response.defer()
     content = await requests_message_content(self.sheets_wrapper, self.guild)
@@ -141,7 +173,15 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
     await itx.followup.send(f"Successfully sent and stored the new requests message in {channel.mention}")
 
   @app_commands.command()
+  async def refresh(self, itx:discord.Interaction):
+    """Refreshes the requests list message. (Only needed for manual edits)."""
+    await itx.response.defer()
+    await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+    await itx.followup.send("Refreshed the message!")
+
+  @app_commands.command()
   async def add(self, itx: discord.Interaction, user: discord.Member):
+    """Adds a user to the requests list."""
     await itx.response.defer()
     if await asyncio.to_thread(self.sheets_wrapper.get, "Requests", user.id):
       await itx.followup.send(f"`{user}` is already on the requests list..")
@@ -155,10 +195,12 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
     values = [user.id, str(user), sheet_time()]
     await asyncio.to_thread(self.sheets_wrapper.append, "Requests", values)
     await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+    await user.add_roles(await self.config_wrapper.requests_role())
     await itx.followup.send(f"Added {user} to the requests list!")
 
   @app_commands.command()
   async def approve(self, itx: discord.Interaction, user: discord.Member, european: bool=False):
+    """Approves a user after screening, moving them to the callers lists."""
     await itx.response.defer()
     if not await asyncio.to_thread(self.sheets_wrapper.get, "Requests", user.id):
       view = ConfirmationView()
@@ -175,10 +217,13 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
     await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", user.id)
     await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
     await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+    await user.remove_roles(await self.config_wrapper.requests_role())
+    await user.add_roles(await self.config_wrapper.callers_role())
     await itx.followup.send(f"{user} has been approved!")
 
   @app_commands.command()
   async def deny(self, itx: discord.Interaction, user: discord.Member, reason: str):
+    """Denies a user after screening, recording the reason they were rejected."""
     await itx.response.defer()
     if not await asyncio.to_thread(self.sheets_wrapper.get, "Requests", user.id):
       await itx.followup.send(f"`{user}` isn't on the requests list.")
@@ -186,27 +231,37 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
     values = [user.id, str(user), reason, sheet_time()]
     await asyncio.to_thread(self.sheets_wrapper.append, "Denied Requests", values)
     await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", user.id)
+    await user.remove_roles(await self.config_wrapper.requests_role())
+    await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
     await itx.followup.send(f"`{user}` was denied: {reason}")
 
   @app_commands.command()
-  async def refresh(self, itx:discord.Interaction):
+  async def remove(self, itx: discord.Interaction, user: discord.Member):
+    """Removes a user from the requests list."""
     await itx.response.defer()
+    if not await asyncio.to_thread(self.sheets_wrapper.get, "Requests", user.id):
+      await itx.followup.send(f"`{user}` isn't on the requests list.")
+      return
+    await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", user.id)
+    await user.remove_roles(await self.config_wrapper.requests_role())
     await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
-    await itx.followup.send("Refreshed the message!")
+    await itx.followup.send(f"`{user}` was removed from requests.")
 
 
 @app_commands.guilds(GUILD_ID)
 class CallersCog(commands.GroupCog, group_name="callers", description="Commands to manage callers."):
+  """A set of commands related to screened callers."""
   def __init__(self, sheets_wrapper: SheetsWrapper, config_wrapper: ConfigWrapper, guild: discord.Guild):
     self.sheets_wrapper = sheets_wrapper
     self.config_wrapper = config_wrapper
     self.guild = guild
 
   async def cog_load(self):
-    logger.info("RequestsCog loaded.")
+    logger.info("CallersCog loaded.")
 
   @app_commands.command()
   async def send_message(self, itx: discord.Interaction, channel: discord.TextChannel):
+    """Sends the call list message. Only needed on first setup."""
     # TODO: Handle existing message.
     await itx.response.defer()
     content = await callers_message_content(self.sheets_wrapper, self.guild)
@@ -220,7 +275,15 @@ class CallersCog(commands.GroupCog, group_name="callers", description="Commands 
     await itx.followup.send(f"Successfully sent and stored the new callers message in {channel.mention}")
 
   @app_commands.command()
+  async def refresh(self, itx:discord.Interaction):
+    """Refreshes the caller list message. (Only needed for manual edits)."""
+    await itx.response.defer()
+    await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+    await itx.followup.send("Refreshed the message!")
+
+  @app_commands.command()
   async def add(self, itx: discord.Interaction, user: discord.Member, european: bool=False):
+    """Adds a user to the callers list, bypassing the screening process."""
     await itx.response.defer()
     # Sanity check the lists.
     if await asyncio.to_thread(self.sheets_wrapper.get, "Requests", user.id):
@@ -241,24 +304,29 @@ class CallersCog(commands.GroupCog, group_name="callers", description="Commands 
     else:
       await asyncio.to_thread(self.sheets_wrapper.append, "New Callers", values)
       await itx.followup.send(f"Added {user} to the new callers list!")
+    await user.add_roles(await self.config_wrapper.callers_role())
     await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
 
   @app_commands.command()
   async def remove(self, itx: discord.Interaction, user: discord.Member):
+    """Removes a user from the callers list."""
     await itx.response.defer()
     if await asyncio.to_thread(self.sheets_wrapper.get, "New Callers", user.id):
       await asyncio.to_thread(self.sheets_wrapper.delete, "New Callers", user.id)
       await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+      await user.remove_roles(await self.config_wrapper.callers_role())
       await itx.followup.send(f"Removed {user} from the new callers list.")
     elif await asyncio.to_thread(self.sheets_wrapper.get, "Repeat Callers", user.id):
       await asyncio.to_thread(self.sheets_wrapper.delete, "Repeat Callers", user.id)
       await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+      await user.remove_roles(await self.config_wrapper.callers_role())
       await itx.followup.send(f"Removed {user} from the repeat callers list.")
     else:
       await itx.followup.send(f"`{user}` isn't on either callers list.")
 
   @app_commands.command()
   async def connect(self, itx: discord.Interaction, user: discord.Member):
+    """Connects a user to the live show voice channel."""
     await itx.response.defer()
     if not user.voice:
       await itx.followup.send(f"{user} is not in a voice channel")
@@ -276,6 +344,7 @@ class CallersCog(commands.GroupCog, group_name="callers", description="Commands 
       await asyncio.to_thread(self.sheets_wrapper.append, "Caller History", values)
       await asyncio.to_thread(self.sheets_wrapper.delete, "New Callers", user.id)
       await asyncio.to_thread(self.sheets_wrapper.delete, "Repeat Callers", user.id)
+      await user.remove_roles(await self.config_wrapper.callers_role())
       await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
     else:
       if user.voice:
@@ -283,7 +352,15 @@ class CallersCog(commands.GroupCog, group_name="callers", description="Commands 
         await user.move_to(None)
 
   @app_commands.command()
-  async def refresh(self, itx:discord.Interaction):
+  async def chronicle(self, itx: discord.Interaction, user: discord.Member):
+    """Adds a user to the past callers history list."""
     await itx.response.defer()
+    # Sanity check the lists.
+    if await asyncio.to_thread(self.sheets_wrapper.get, "Caller History", user.id):
+      await itx.followup.send(f"`{user}` is already in the caller history.")
+      return
+
+    values = [user.id, str(user), sheet_time()]
+    await asyncio.to_thread(self.sheets_wrapper.append, "Caller History", values)
     await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
-    await itx.followup.send("Refreshed the message!")
+    await itx.followup.send(f"Added {user} to the caller history.")

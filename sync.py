@@ -19,10 +19,10 @@ class SyncCog(commands.Cog):
   async def cog_load(self):
     logger.info(f"SyncCog loaded.")
 
-  @commands.hybrid_command(
-      description="Sync the bot's commands to the guild. NOTE: Only needed on changes. (This is heavily rate limited!!!)")
+  @commands.hybrid_command()
   @app_commands.guilds(GUILD_ID)
   async def sync(self, ctx: commands.Context):
+    """Sync the bot's commands to the guild. NOTE: Only needed on changes. This is heavily rate limited!!!"""
     await ctx.defer()
     await self.tree.sync(guild=self.guild)
     await ctx.reply(f"Successfully synced to {self.guild}!", ephemeral=True)
