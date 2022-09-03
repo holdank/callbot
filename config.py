@@ -6,7 +6,7 @@ import logging
 
 from discord import app_commands
 from discord.ext import commands
-from global_config import GUILD_ID
+from global_config import GUILD_ID, SPREADSHEET_ID
 from typing import Optional
 
 
@@ -51,6 +51,7 @@ class ConfigWrapper:
       "```json",
       json.dumps(config, sort_keys=True, indent=2),
       "```"])
+    embed.description += f"\n**Spreadsheet:** https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/"
     return embed
 
   def raw_config(self) -> str:
