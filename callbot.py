@@ -8,7 +8,7 @@ import traceback
 
 from discord import app_commands
 from discord.ext import commands
-from global_config import GUILD_ID, SPREADSHEET_ID, SHEETS_SCOPES, DEV_ID
+from global_config import GUILD_ID, SPREADSHEET_ID, SHEETS_SCOPES, DEV_ID, DISCORD_TOKEN
 from google.oauth2.service_account import Credentials
 
 
@@ -90,17 +90,12 @@ class LoaderCog(commands.Cog):
 async def main():
   parser = argparse.ArgumentParser()
   parser.add_argument(
-      "--discord_token", default="discord_token", help="The path to your Discord bot token.")
-  parser.add_argument(
       "--config", default="dev_config.json", help="The path to the JSON config for the bot.")
   parser.add_argument(
       "--schema", default="config.schema", help="The path to the JSON schema for the bot config.")
   parser.add_argument(
       "--creds", default="creds.json", help="The path to the JSON service account key for Google Sheets.")
   args = parser.parse_args()
-
-  with open(args.discord_token, "r") as f:
-    discord_token = f.read().strip()
 
   sheets_creds = Credentials.from_service_account_file(
     args.creds, scopes=SHEETS_SCOPES)
@@ -115,7 +110,7 @@ async def main():
   async with bot:
     loader_cog = LoaderCog(bot, sheets_wrapper, args.config, args.schema)
     await bot.add_cog(loader_cog)
-    await bot.start(discord_token)
+    await bot.start(DISCORD_TOKEN)
 
 
 if __name__ == "__main__":
