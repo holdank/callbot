@@ -64,11 +64,19 @@ def get_mentions(user_rows: list, guild: discord.Guild) -> str:
       continue
     user_id = values[0]
     name = values[1]
+    date_added = values[-1]
     user = guild.get_member(user_id)
     if not user:
       logger.warning(f"Skipping missing user: {user_id}, {name}")
       continue
-    mention_list.append(user.mention)
+
+    try:
+      relative_time = discord.utils.format_dt(datetime.fromisoformat(date_added), style="R")
+    except ValueError:
+      # Catch the error here in case a date was mangled.
+      relative_time = f"`Invalid Date: {date_added}`"
+    mention_list.append(f"{user.mention} {relative_time}")
+
   return "\n".join(mention_list)
 
 
