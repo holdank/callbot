@@ -48,6 +48,10 @@ class LoaderCog(commands.Cog):
       content = f"Error:\n```py\n{''.join(traceback.format_exception(error))}```"
     logging.warning(content)
 
+    # Obey Discord's 2000 character limit for messages, using 1900 for the mention and trunaction message.
+    if len(content) > 2000:
+      content = f"{content[:1900]} ...\n```**NOTE:** Stack trace truncated due to Discord's 2000 character limit."
+
     # Ping me if there's an error.
     guild = self.bot.get_guild(GUILD_ID)
     if guild:
