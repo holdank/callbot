@@ -78,11 +78,16 @@ class LoaderCog(commands.Cog):
         await self.bot.close()
         return
 
+      # Fetch the dev if possible to DM serious errors.
+      dev = guild.get_member(DEV_ID)
+      if not dev:
+        logging.warn(f"Unable to find dev with id {DEV_ID}")
+
       await self.bot.add_cog(SyncCog(guild, self.bot.tree))
       config_wrapper = ConfigWrapper(self.config_path, self.schema_path, guild)
       await self.bot.add_cog(UserCommandsCog(self.sheets_wrapper, config_wrapper, guild))
       await self.bot.add_cog(ConfigCog(config_wrapper))
-      await self.bot.add_cog(RequestsCog(self.sheets_wrapper, config_wrapper, guild))
+      await self.bot.add_cog(RequestsCog(self.sheets_wrapper, config_wrapper, guild, dev))
       await self.bot.add_cog(CallersCog(self.sheets_wrapper, config_wrapper, guild))
 
       logging.info(f"Setup complete. Running in {guild} as {self.bot.user}!")
@@ -96,7 +101,7 @@ async def main():
   parser.add_argument(
       "--config", default="dev_config.json", help="The path to the JSON config for the bot.")
   parser.add_argument(
-      "--schema", default="config.schema", help="The path to the JSON schema for the bot config.")
+      "--schema", default="schema.json", help="The path to the JSON schema for the bot config.")
   parser.add_argument(
       "--creds", default="creds.json", help="The path to the JSON service account key for Google Sheets.")
   args = parser.parse_args()

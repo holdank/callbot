@@ -1,18 +1,19 @@
 import asyncio
 import discord
 import logging
+import traceback
 
 from config import ConfigWrapper
 from datetime import datetime
-from discord import app_commands
-from discord import ui
-from discord.ext import commands
+from discord import app_commands, ui
+from discord.ext import commands, tasks
 from global_config import GUILD_ID
 from sheets_orm import SheetsWrapper
 from typing import Optional
 
 
 logger = logging.getLogger(__name__)
+autoremoval_loop_interval = 10  # Seconds.
 
 
 class ConfirmationView(ui.View):
@@ -179,14 +180,77 @@ class UserCommandsCog(commands.Cog, description="Call-in commands for users."):
 
 @app_commands.guilds(GUILD_ID)
 class RequestsCog(commands.GroupCog, group_name="requests", description="Commands to manage screening requests"):
-  def __init__(self, sheets_wrapper: SheetsWrapper, config_wrapper: ConfigWrapper, guild: discord.Guild):
+  def __init__(self, sheets_wrapper: SheetsWrapper, config_wrapper: ConfigWrapper, guild: discord.Guild,
+      dev: Optional[discord.Member]):
     self.sheets_wrapper = sheets_wrapper
     self.config_wrapper = config_wrapper
     self.guild = guild
+    self.dev = dev
 
   async def cog_load(self):
     logger.info("RequestsCog loaded.")
+    self.removal_loop.start()
 
+  async def log(self, content: str, level=logging.INFO):
+    logger.log(level, content)
+    # Obey 2000 character message limits.
+    if len(content) >= 2000:
+      content = f"{content[:1900]}\n```**Note:** Stack trace truncated due to messaging limits."
+    if level == logging.ERROR and self.dev:
+      try:
+        await self.dev.send(content)
+      except Exception as error:
+        logger.log(level, f"Error DMing dev: {error}")
+    terminal = self.config_wrapper.terminal()
+    if terminal:
+      await terminal.send(content)
+
+  @tasks.loop(seconds=autoremoval_loop_interval)
+  async def removal_loop(self):
+    """A loop which removes users who haven't been confirmed by the timeout."""
+    # Get all requests.
+    requesters = await asyncio.to_thread(self.sheets_wrapper.get_all, "Requests")
+
+    missing_ids = []
+    delete_users = []
+    max_days = self.config_wrapper.requests_timeout()
+    for values in requesters:
+      if not values:
+        continue
+      user_id = values[0]
+      name = values[1]
+      date_added = values[-1]
+      user = self.guild.get_member(user_id)
+
+      if not user:
+        await self.log(f"Removing missing user: `{name}` `({user_id})`.")
+        missing_ids.append(user_id)
+        continue
+
+      try:
+        dt = datetime.fromisoformat(date_added)
+      except ValueError:
+        await self.log(f"Skipping invalid datetime for `{user}`: {date_added}", level=logging.WARNING)
+        continue
+
+      td = datetime.today() - dt
+      if td.days >= max_days:
+        await self.log(f"Removing `{user}` who's been on the list for more than {max_days} days.")
+        delete_users.append(user)
+
+    delete_ids = [u.id for u in delete_users] + missing_ids
+    await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", *delete_ids)
+    for u in delete_users:
+      try:
+        await u.send(f"You were automatically removed from the MrGirl Hotline caller requests list because you weren't screened within {max_days} days.\n\nIf you'd still like to be screened, run `/screenme` again in the requests channel. Be sure to read the instructions to ensure you're screened next time.")
+      except Exception as error:
+        logger.info(f"Unable to DM `{u}` about their autoremoval:\n	{error}")
+
+
+  @removal_loop.error
+  async def on_removal_loop_error(self, error):
+    content = f"**Requests removal loop failed.**\n\nIf the error has been resolved, you can start the loop again using `/requests start_loop`.\n```py{''.join(traceback.format_exception(error))}```"
+    await self.log(content, level=logging.ERROR)
 
   @app_commands.command()
   async def send_message(self, itx: discord.Interaction, channel: discord.TextChannel):
@@ -282,6 +346,25 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
     if not await remove_role(itx, user, await self.config_wrapper.requests_role()):
       return
     await itx.followup.send(f"`{user}` was removed from requests.")
+
+  @app_commands.command()
+  async def start_loop(self, itx: discord.Interaction):
+    """Starts the requests autoremoval loop. The loop is already started when the bot starts."""
+    if self.removal_loop.is_running():
+      await itx.response.send_message("The autoremoval loop is already running.")
+      return
+    self.removal_loop.start()
+    await itx.response.send_message("Started the autoremoval loop.")
+
+  @app_commands.command()
+  async def stop_loop(self, itx: discord.Interaction):
+    """Stops the requests autoremoval loop."""
+    if not self.removal_loop.is_running():
+      await itx.response.send_message("The autoremoval loop is stopped.")
+      return
+    self.removal_loop.cancel()
+    await itx.response.send_message("Stopped the autoremoval loop.")
+
 
 
 @app_commands.guilds(GUILD_ID)

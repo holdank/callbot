@@ -58,6 +58,7 @@ class ConfigWrapper:
     with open(self.config_path, "r") as f:
       return f.read()
 
+  # TODO: These don't need to be async.
   async def callers_message(self) -> Optional[discord.Message]:
     return await self._get_message("callers_message")
 
@@ -71,7 +72,20 @@ class ConfigWrapper:
     return self._get_role("requests_role")
 
   async def show_vc(self) -> Optional[discord.VoiceChannel]:
-    return self._get_channel("show_vc")
+    channel =  self._get_channel("show_vc")
+    if isinstance(channel, discord.VoiceChannel):
+      return channel
+    return None
+
+  def terminal(self) -> Optional[discord.TextChannel]:
+    channel = self._get_channel("terminal_tc")
+    if isinstance(channel, discord.TextChannel):
+      return channel
+    return None
+
+  def requests_timeout(self) -> int:
+    config = self.read()
+    return config["requests_timeout"]
 
   async def _get_message(self, key: str) -> Optional[discord.Message]:
     config = self.read()
@@ -92,12 +106,9 @@ class ConfigWrapper:
     config = self.read()
     return self.guild.get_role(config[key])
 
-  def _get_channel(self, key: str) -> Optional[discord.VoiceChannel]:
+  def _get_channel(self, key: str) -> Optional[discord.abc.GuildChannel]:
     config = self.read()
-    channel = self.guild.get_channel(config[key])
-    if isinstance(channel, discord.VoiceChannel):
-      return channel
-    return None
+    return self.guild.get_channel(config[key])
 
 
 @app_commands.guilds(GUILD_ID)
@@ -120,15 +131,19 @@ class ConfigCog(commands.GroupCog, group_name="cfg"):
       requests_role="The role give to users requesting to be screened.",
       callers_message="A message id for the callers list in the form channel_id-message_id",
       requests_message="A message id for the requests list in the form channel_id-message_id",
-      show_vc="The VC channel for the live show.")
+      show_vc="The voice channel for the live show.",
+      terminal="The text channel where bot should send logs.",
+      requests_timeout="The number of days a user can be on the requests list before being automatically removed.")
   async def set(self, itx: discord.Interaction,
       callers_role: Optional[discord.Role],
       requests_role: Optional[discord.Role],
       callers_message: Optional[str],
       requests_message: Optional[str],
-      show_vc: Optional[discord.VoiceChannel]):
+      show_vc: Optional[discord.VoiceChannel],
+      terminal: Optional[discord.TextChannel],
+      requests_timeout: Optional[int]):
     """Sets the values of fields in the bot's Discord config file."""
-    if not any([callers_role, requests_role, show_vc, callers_message, requests_message]):
+    if not any([callers_role, requests_role, show_vc, callers_message, requests_message, terminal, requests_timeout]):
       await itx.response.send_message("At least one option must be provided!")
       return
 
@@ -143,5 +158,9 @@ class ConfigCog(commands.GroupCog, group_name="cfg"):
       config["callers_message"] = callers_message
     if requests_message:
       config["requests_message"] = requests_message
+    if terminal:
+      config["terminal_tc"] = terminal.id
+    if requests_timeout:
+      config["requests_timeout"] = requests_timeout
     self.config_wrapper.write(config)
     await itx.response.send_message(f"Successfully updated config!", embed=self.config_wrapper.embed())
