@@ -37,13 +37,13 @@ class LoaderCog(commands.Cog):
   async def cog_load(self):
     self.setup_task = asyncio.create_task(self.initial_setup())
 
-  async def handle_command_error(self, itx: discord.Interaction, error: app_commands.AppCommandError):
+  async def handle_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
     """Prints out any uncaught exceptions in commands"""
     # TODO: Stop printing the entire stacktrace in the Discord response.
     # TODO: Catch errors from the Sheets threads.
     # TODO: Add better separation between stacktraces within the logging.
-    if itx:
-      content = f"Error running `/{itx.command.qualified_name}`:\n```py\n{''.join(traceback.format_exception(error))}```"
+    if interaction and isinstance(interaction.command, app_commands.Command):
+      content = f"Error running `/{interaction.command.qualified_name}`:\n```py\n{''.join(traceback.format_exception(error))}```"
     else:
       content = f"Error:\n```py\n{''.join(traceback.format_exception(error))}```"
     logging.warning(content)
@@ -55,10 +55,10 @@ class LoaderCog(commands.Cog):
       if dev:
         content = f"{dev.mention}\n{content}"
 
-    if not itx.response.is_done():
-      await itx.response.send_message(content)
+    if not interaction.response.is_done():
+      await interaction.response.send_message(content)
     else:
-      await itx.followup.send(content=content)
+      await interaction.followup.send(content=content)
 
   async def initial_setup(self):
     """Waits for the bot to connect before loading the rest of the cogs."""

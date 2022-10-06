@@ -84,7 +84,7 @@ class ConfigWrapper:
       return None
 
     channel = self.guild.get_channel(channel_id)
-    if not channel:
+    if not channel or not isinstance(channel, discord.TextChannel):
       return None
     return await channel.fetch_message(message_id)
 
@@ -94,7 +94,10 @@ class ConfigWrapper:
 
   def _get_channel(self, key: str) -> Optional[discord.VoiceChannel]:
     config = self.read()
-    return self.guild.get_channel(config[key])
+    channel = self.guild.get_channel(config[key])
+    if isinstance(channel, discord.VoiceChannel):
+      return channel
+    return None
 
 
 @app_commands.guilds(GUILD_ID)

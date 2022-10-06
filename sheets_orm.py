@@ -60,15 +60,15 @@ class SheetsWrapper:
       restore_ints(values)
     return values
 
-  def get_all(self, sheet: str) -> list[dict]:
+  def get_all(self, sheet: str) -> list[list]:
     rows = self._fetch_rows(sheet)
     if not rows:
-      return None
+      return []
     # Skip the first row since that was a header.
     return rows[1:]
 
   def get(self, sheet: str, user_id: int) -> Optional[list]:
-    rows = self.get_all(sheet) or []
+    rows = self.get_all(sheet)
     return discord.utils.find(lambda row: row and (row[0] == user_id), rows)
 
   def append(self, sheet: str, values: list):

@@ -9,6 +9,7 @@ from discord import ui
 from discord.ext import commands
 from global_config import GUILD_ID
 from sheets_orm import SheetsWrapper
+from typing import Optional
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,8 @@ class ConfirmationView(ui.View):
 
   async def _shutdown(self, itx, content):
     for child in self.children:
-      child.disabled = True
+      if isinstance(child, ui.Button):
+        child.disabled = True
     self.stop()
     await itx.response.edit_message(content=content, view=self)
 
@@ -124,6 +126,22 @@ async def update_callers_message(itx: discord.Interaction, config_wrapper: Confi
     await itx.followup.send("No callers list message was found. Use `/callers send_message` to create one.")
 
 
+async def add_role(itx: discord.Interaction, user: discord.Member, role: Optional[discord.Role]) -> bool:
+  if not role:
+    await itx.followup.send(f"Unable to add role to {user}: Role not found.")
+    return False
+  await user.add_roles(role)
+  return True
+
+
+async def remove_role(itx: discord.Interaction, user: discord.Member, role: Optional[discord.Role]) -> bool:
+  if not role:
+    await itx.followup.send(f"Unable to remove role from {user}: Role not found.")
+    return False
+  await user.remove_roles(role)
+  return True
+
+
 class UserCommandsCog(commands.Cog, description="Call-in commands for users."):
   def __init__(self, sheets_wrapper: SheetsWrapper, config_wrapper: ConfigWrapper, guild: discord.Guild):
     self.sheets_wrapper = sheets_wrapper
@@ -138,6 +156,9 @@ class UserCommandsCog(commands.Cog, description="Call-in commands for users."):
   async def screenme(self, itx: discord.Interaction):
     """Adds you to the list of people requesting to be screened."""
     user = itx.user
+    if not isinstance(user, discord.Member):
+      await itx.response.send_message("You must use this command in a guild channel!", ephemeral=True)
+      return
     await itx.response.defer(ephemeral=True)
     if await asyncio.to_thread(self.sheets_wrapper.get, "Requests", user.id):
       await itx.followup.send("You're already on the requests list.", ephemeral=True)
@@ -150,7 +171,8 @@ class UserCommandsCog(commands.Cog, description="Call-in commands for users."):
       return
     values = [user.id, str(user), sheet_time()]
     await asyncio.to_thread(self.sheets_wrapper.append, "Requests", values)
-    await user.add_roles(await self.config_wrapper.requests_role())
+    if not await add_role(itx, user, await self.config_wrapper.requests_role()):
+      return
     await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
     await itx.followup.send("You've been added to the requests list!", ephemeral=True)
 
@@ -164,6 +186,7 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
 
   async def cog_load(self):
     logger.info("RequestsCog loaded.")
+
 
   @app_commands.command()
   async def send_message(self, itx: discord.Interaction, channel: discord.TextChannel):
@@ -202,8 +225,9 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
       return
     values = [user.id, str(user), sheet_time()]
     await asyncio.to_thread(self.sheets_wrapper.append, "Requests", values)
+    if not await add_role(itx, user, await self.config_wrapper.requests_role()):
+      return
     await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
-    await user.add_roles(await self.config_wrapper.requests_role())
     await itx.followup.send(f"Added {user} to the requests list!")
 
   @app_commands.command()
@@ -225,8 +249,10 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
     await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", user.id)
     await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
     await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
-    await user.remove_roles(await self.config_wrapper.requests_role())
-    await user.add_roles(await self.config_wrapper.callers_role())
+    if not await remove_role(itx, user, await self.config_wrapper.requests_role()):
+      return
+    if not await add_role(itx, user, await self.config_wrapper.callers_role()):
+      return
     await itx.followup.send(f"{user} has been approved!")
 
   @app_commands.command()
@@ -239,8 +265,9 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
     values = [user.id, str(user), reason, sheet_time()]
     await asyncio.to_thread(self.sheets_wrapper.append, "Denied Requests", values)
     await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", user.id)
-    await user.remove_roles(await self.config_wrapper.requests_role())
     await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+    if not await remove_role(itx, user, await self.config_wrapper.requests_role()):
+      return
     await itx.followup.send(f"`{user}` was denied: {reason}")
 
   @app_commands.command()
@@ -251,8 +278,9 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
       await itx.followup.send(f"`{user}` isn't on the requests list.")
       return
     await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", user.id)
-    await user.remove_roles(await self.config_wrapper.requests_role())
     await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+    if not await remove_role(itx, user, await self.config_wrapper.requests_role()):
+      return
     await itx.followup.send(f"`{user}` was removed from requests.")
 
 
@@ -312,7 +340,8 @@ class CallersCog(commands.GroupCog, group_name="callers", description="Commands 
     else:
       await asyncio.to_thread(self.sheets_wrapper.append, "New Callers", values)
       await itx.followup.send(f"Added {user} to the new callers list!")
-    await user.add_roles(await self.config_wrapper.callers_role())
+    if not await add_role(itx, user, await self.config_wrapper.callers_role()):
+      return
     await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
 
   @app_commands.command()
@@ -322,12 +351,14 @@ class CallersCog(commands.GroupCog, group_name="callers", description="Commands 
     if await asyncio.to_thread(self.sheets_wrapper.get, "New Callers", user.id):
       await asyncio.to_thread(self.sheets_wrapper.delete, "New Callers", user.id)
       await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
-      await user.remove_roles(await self.config_wrapper.callers_role())
+      if not await remove_role(itx, user, await self.config_wrapper.callers_role()):
+        return
       await itx.followup.send(f"Removed {user} from the new callers list.")
     elif await asyncio.to_thread(self.sheets_wrapper.get, "Repeat Callers", user.id):
       await asyncio.to_thread(self.sheets_wrapper.delete, "Repeat Callers", user.id)
       await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
-      await user.remove_roles(await self.config_wrapper.callers_role())
+      if not await remove_role(itx, user, await self.config_wrapper.callers_role()):
+        return
       await itx.followup.send(f"Removed {user} from the repeat callers list.")
     else:
       await itx.followup.send(f"`{user}` isn't on either callers list.")
@@ -352,8 +383,9 @@ class CallersCog(commands.GroupCog, group_name="callers", description="Commands 
       await asyncio.to_thread(self.sheets_wrapper.append, "Caller History", values)
       await asyncio.to_thread(self.sheets_wrapper.delete, "New Callers", user.id)
       await asyncio.to_thread(self.sheets_wrapper.delete, "Repeat Callers", user.id)
-      await user.remove_roles(await self.config_wrapper.callers_role())
       await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+      if not await remove_role(itx, user, await self.config_wrapper.callers_role()):
+        return
     else:
       if user.voice:
         # Kicks the user from vc.
