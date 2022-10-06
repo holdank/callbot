@@ -109,13 +109,15 @@ async def callers_message_content(sheets_wrapper, guild):
   return content
 
 
-async def update_requests_message(itx: discord.Interaction, config_wrapper: ConfigWrapper, sheets_wrapper, guild):
+async def update_requests_message(itx: Optional[discord.Interaction], config_wrapper: ConfigWrapper, sheets_wrapper, guild):
   list_message = await config_wrapper.requests_message()
   if list_message:
     content = await requests_message_content(sheets_wrapper, guild)
     await list_message.edit(content=content)
   else:
-    await itx.followup.send("No requests list message was found. Use `/requests send_message` to create one.")
+    logger.error("Unable to update requests message: not found")
+    if itx:
+      await itx.followup.send("No requests list message was found. Use `/requests send_message` to create one.")
 
 
 async def update_callers_message(itx: discord.Interaction, config_wrapper: ConfigWrapper, sheets_wrapper, guild):
@@ -241,7 +243,7 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
     delete_ids = [u.id for u in delete_users] + missing_ids
     if delete_ids:
       await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", *delete_ids)
-      await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+      await update_requests_message(None, self.config_wrapper, self.sheets_wrapper, self.guild)
     for u in delete_users:
       try:
         await u.send(f"You were automatically removed from the MrGirl Hotline caller requests list because you weren't screened within {max_days} days.\n\nIf you'd still like to be screened, run `/screenme` again in the requests channel. Be sure to read the instructions to ensure you're screened next time.")
