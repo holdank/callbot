@@ -13,7 +13,7 @@ from typing import Optional
 
 
 logger = logging.getLogger(__name__)
-autoremoval_loop_interval = 10  # Seconds.
+autoremoval_loop_interval = 10 * 60 # Seconds.
 
 
 class ConfirmationView(ui.View):
