@@ -111,10 +111,10 @@ class SheetsWrapper:
     return result
 
   @threaded
-  def delete(self, sheet: str, user_id: int):
-    """Deletes rows matching the user_id by overwriting them"""
+  def delete(self, sheet: str, *user_ids: int):
+    """Deletes rows matching the user_ids by overwriting them"""
     rows = self.get_all(sheet)
-    new_rows = list(filter(lambda row: (not row) or (row[0] != user_id), rows))
+    new_rows = list(filter(lambda row: (not row) or (row[0] not in user_ids), rows))
 
     num_clears = len(rows) - len(new_rows)
     # Sheets doesn't like empty updates.
