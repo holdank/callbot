@@ -2,10 +2,11 @@ import asyncio
 import discord
 
 
+from global_config import SPREADSHEET_ID, SHEETS_SCOPES
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from typing import Optional
-from global_config import SPREADSHEET_ID, SHEETS_SCOPES
+from threaded import threaded
 
 
 def value_list(values: list):
@@ -45,11 +46,13 @@ def restore_ints(value_list):
 # TODO: Stop using magic strings for the sheet names.
 class SheetsWrapper:
   """A class which wraps Google Sheets API calls to simplify operations."""
+  @threaded
   def __init__(self, credentials, spreadsheet_id):
     self.spreadsheet_id = spreadsheet_id
     service = build('sheets', 'v4', credentials=credentials)
     self.sheets = service.spreadsheets()
 
+  @threaded
   def _fetch_rows(self, range) -> list[list]:
     result = self.sheets.values().get(
         spreadsheetId=self.spreadsheet_id,
@@ -60,6 +63,7 @@ class SheetsWrapper:
       restore_ints(values)
     return values
 
+  @threaded
   def get_all(self, sheet: str) -> list[list]:
     rows = self._fetch_rows(sheet)
     if not rows:
@@ -67,10 +71,12 @@ class SheetsWrapper:
     # Skip the first row since that was a header.
     return rows[1:]
 
+  @threaded
   def get(self, sheet: str, user_id: int) -> Optional[list]:
     rows = self.get_all(sheet)
     return discord.utils.find(lambda row: row and (row[0] == user_id), rows)
 
+  @threaded
   def append(self, sheet: str, values: list):
     result = self.sheets.values().append(
         spreadsheetId=self.spreadsheet_id,
@@ -79,6 +85,7 @@ class SheetsWrapper:
         body=value_list(values)).execute()
     return result
 
+  @threaded
   def update(self, sheet: str, values: list):
     if not values:
       raise ValueError("Must have at least one value (user_id) for an update.")
@@ -103,6 +110,7 @@ class SheetsWrapper:
         body=value_list(values)).execute()
     return result
 
+  @threaded
   def delete(self, sheet: str, user_id: int):
     """Deletes rows matching the user_id by overwriting them"""
     rows = self.get_all(sheet)
