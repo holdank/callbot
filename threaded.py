@@ -36,7 +36,6 @@ executor.submit(__init_thread_local).result()
 def threaded(f):
   @wraps(f)
   def wrapper(*args, **kwargs):
-    start = time.time()
     if "thread_id" not in thread_local.__dict__:
       return executor.submit(f, *args, **kwargs).result()
     return f(*args, **kwargs)
