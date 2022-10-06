@@ -239,7 +239,9 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
         delete_users.append(user)
 
     delete_ids = [u.id for u in delete_users] + missing_ids
-    await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", *delete_ids)
+    if delete_ids:
+      await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", *delete_ids)
+      await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
     for u in delete_users:
       try:
         await u.send(f"You were automatically removed from the MrGirl Hotline caller requests list because you weren't screened within {max_days} days.\n\nIf you'd still like to be screened, run `/screenme` again in the requests channel. Be sure to read the instructions to ensure you're screened next time.")
