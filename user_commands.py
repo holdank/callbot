@@ -87,7 +87,7 @@ async def requests_message_content(sheets_wrapper, guild):
   content = "".join([
       "**Screening Wait List**\n",
       "These are people waiting to speak to someone, NOT a list for the live show. ",
-      "Read above messages to find screener availability.\n\n"
+      "Check the message below to find screener readability.\n\n"
       ])
 
   requesters = await asyncio.to_thread(sheets_wrapper.get_all, "Requests")
