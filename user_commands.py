@@ -83,37 +83,36 @@ def get_mentions(user_rows: list, guild: discord.Guild) -> str:
   return "\n".join(mention_list)
 
 
-async def requests_message_content(sheets_wrapper, guild):
-  content = "".join([
-      "**Screening Wait List**\n",
-      "These are people waiting to speak to someone, NOT a list for the live show. ",
-      "Check the message below to find screener readability.\n\n"
-      ])
+async def requests_message_embed(sheets_wrapper, guild) -> discord.Embed:
+  embed = discord.Embed(title="**Screening Wait List**")
+  embed.colour = discord.Colours.blue()
+  embed.description = (
+      "These are people waiting to speak to someone, NOT a list for the live show. "
+      "Check the message below to find screener readability.\n\n")
 
   requesters = await asyncio.to_thread(sheets_wrapper.get_all, "Requests")
-  content += get_mentions(requesters, guild)
-  return content
+  embed.description += get_mentions(requesters, guild)
+  return embed
 
 
-async def callers_message_content(sheets_wrapper, guild):
-  content = "".join([
-      "**Caller Wait List**\n",
-      "These are people waiting to speak on the live show.\n\n"
-      ])
+async def callers_message_embed(sheets_wrapper, guild) -> discord.Embed:
+  embed = discord.Embed(title="Caller Wait List")
+  embed.colour = discord.Colours.green()
+  embed.description = "These are people waiting to speak on the live show.\n\n"
 
   new_callers = await asyncio.to_thread(sheets_wrapper.get_all, "New Callers")
   repeat_callers = await asyncio.to_thread(sheets_wrapper.get_all, "Repeat Callers")
 
-  content += f"**New Callers:**\n{get_mentions(new_callers, guild)}"
-  content += f"\n\n**Repeat Callers:**\n{get_mentions(repeat_callers, guild)}"
-  return content
+  embed.description += f"**New Callers:**\n{get_mentions(new_callers, guild)}"
+  embed.description += f"\n\n**Repeat Callers:**\n{get_mentions(repeat_callers, guild)}"
+  return embed
 
 
 async def update_requests_message(itx: Optional[discord.Interaction], config_wrapper: ConfigWrapper, sheets_wrapper, guild):
   list_message = await config_wrapper.requests_message()
   if list_message:
-    content = await requests_message_content(sheets_wrapper, guild)
-    await list_message.edit(content=content)
+    embed = await requests_message_embed(sheets_wrapper, guild)
+    await list_message.edit(embed=embed)
   else:
     logger.error("Unable to update requests message: not found")
     if itx:
@@ -123,8 +122,8 @@ async def update_requests_message(itx: Optional[discord.Interaction], config_wra
 async def update_callers_message(itx: discord.Interaction, config_wrapper: ConfigWrapper, sheets_wrapper, guild):
   list_message = await config_wrapper.callers_message()
   if list_message:
-    content = await callers_message_content(sheets_wrapper, guild)
-    await list_message.edit(content=content)
+    embed = await callers_message_embed(sheets_wrapper, guild)
+    await list_message.edit(embed=embed)
   else:
     await itx.followup.send("No callers list message was found. Use `/callers send_message` to create one.")
 
@@ -261,8 +260,8 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
     """Sends the call list message. Only needed on first setup."""
     # TODO: Handle existing message.
     await itx.response.defer()
-    content = await requests_message_content(self.sheets_wrapper, self.guild)
-    message = await channel.send(content, allowed_mentions=discord.AllowedMentions.none())
+    embed = await requests_message_embed(self.sheets_wrapper, self.guild)
+    message = await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
     # Store this new message in the config.
     config = self.config_wrapper.read()
@@ -387,8 +386,8 @@ class CallersCog(commands.GroupCog, group_name="callers", description="Commands 
     """Sends the call list message. Only needed on first setup."""
     # TODO: Handle existing message.
     await itx.response.defer()
-    content = await callers_message_content(self.sheets_wrapper, self.guild)
-    message = await channel.send(content, allowed_mentions=discord.AllowedMentions.none())
+    embed = await callers_message_embed(self.sheets_wrapper, self.guild)
+    message = await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
     # Store this new message in the config.
     config = self.config_wrapper.read()
