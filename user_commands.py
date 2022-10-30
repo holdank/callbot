@@ -85,7 +85,7 @@ def get_mentions(user_rows: list, guild: discord.Guild) -> str:
 
 async def requests_message_embed(sheets_wrapper, guild) -> discord.Embed:
   embed = discord.Embed(title="**Screening Wait List**")
-  embed.colour = discord.Colours.blue()
+  embed.colour = discord.Colour.blue()
   embed.description = (
       "These are people waiting to speak to someone, NOT a list for the live show. "
       "Check the message below to find screener readability.\n\n")
@@ -97,7 +97,7 @@ async def requests_message_embed(sheets_wrapper, guild) -> discord.Embed:
 
 async def callers_message_embed(sheets_wrapper, guild) -> discord.Embed:
   embed = discord.Embed(title="Caller Wait List")
-  embed.colour = discord.Colours.green()
+  embed.colour = discord.Colour.green()
   embed.description = "These are people waiting to speak on the live show.\n\n"
 
   new_callers = await asyncio.to_thread(sheets_wrapper.get_all, "New Callers")
