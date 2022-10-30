@@ -315,12 +315,12 @@ class RequestsCog(commands.GroupCog, group_name="requests", description="Command
     else:
       await asyncio.to_thread(self.sheets_wrapper.append, "New Callers", values)
     await asyncio.to_thread(self.sheets_wrapper.delete, "Requests", user.id)
-    await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
-    await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
     if not await remove_role(itx, user, await self.config_wrapper.requests_role()):
       return
     if not await add_role(itx, user, await self.config_wrapper.callers_role()):
       return
+    await update_requests_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
+    await update_callers_message(itx, self.config_wrapper, self.sheets_wrapper, self.guild)
     await itx.followup.send(f"{user} has been approved!")
 
   @app_commands.command()
