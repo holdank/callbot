@@ -89,6 +89,7 @@ async def requests_message_embed(sheets_wrapper, guild) -> discord.Embed:
   embed.description = (
       "These are people waiting to speak to someone, NOT a list for the live show. "
       "Check the message below to find screener readability.\n\n")
+  embed.set_footer(text="Add yourself to this list with /screenme")
 
   requesters = await asyncio.to_thread(sheets_wrapper.get_all, "Requests")
   embed.description += get_mentions(requesters, guild)
