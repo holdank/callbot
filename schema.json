@@ -1,0 +1,35 @@
+{
+    "type": "object",
+    "properties": {
+        "callers_message": {
+            "type": "string"
+        },
+        "callers_role": {
+            "type": "integer"
+        },
+        "requests_message": {
+            "type": "string"
+        },
+        "requests_role": {
+            "type": "integer"
+        },
+        "show_vc": {
+            "type": "integer"
+        },
+        "terminal_tc": {
+            "type": "integer"
+        },
+        "requests_timeout": {
+            "type": "integer"
+        }
+    },
+    "required": [
+        "callers_message",
+        "callers_role",
+        "requests_message",
+        "requests_role",
+        "show_vc",
+        "terminal_tc",
+        "requests_timeout"
+    ]
+}
